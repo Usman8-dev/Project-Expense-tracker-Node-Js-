@@ -50,16 +50,16 @@ const RegisterUser = async (req, res) => {
         res.send(err.message);
     }
 }
-const LoginUser = async(req, res) => {
+const LoginUser = async (req, res) => {
     try {
         let { email, password } = req.body;
 
         let finduserLogin = await UserModel.findOne({ email: email });
         if (!finduserLogin) {
-             return res.status(401).json({
-                        success: false,
-                        message: "Email or Password is Invalid",
-                    });
+            return res.status(401).json({
+                success: false,
+                message: "Email or Password is Invalid",
+            });
         } else {
             bcrypt.compare(password, finduserLogin.password, function (err, result) {
                 if (result) {
@@ -84,4 +84,13 @@ const LoginUser = async(req, res) => {
         res.send(err.message);
     }
 }
-module.exports = { RegisterUser, LoginUser }
+
+const LogoutUser = async (req, res) => {
+    res.cookie('token', "");
+    return res.status(201).json({
+        success: true,
+        message: "Logout Successfully",
+    });
+
+}
+module.exports = { RegisterUser, LoginUser, LogoutUser }
