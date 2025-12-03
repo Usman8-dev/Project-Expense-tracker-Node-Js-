@@ -49,7 +49,22 @@ const UpdateExpense = async (req, res) => {
     } catch (err) {
         res.send(err.message);
     }
-
 }
 
-module.exports = { CreateExpense, UpdateExpense }
+const AllExpense = async (req, res) => {
+    try {
+        let allExp = await ExpenseModel.find();
+        return res.status(201).json({
+            success: true,
+            message: "All Expenses",
+            All_Expenses: allExp,
+        });
+
+    } catch (err) {
+        res.send.status(401).json({
+            err: message,
+        })
+    }
+}
+
+module.exports = { CreateExpense, UpdateExpense, AllExpense }
