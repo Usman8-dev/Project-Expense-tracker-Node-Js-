@@ -67,4 +67,35 @@ const AllExpense = async (req, res) => {
     }
 }
 
-module.exports = { CreateExpense, UpdateExpense, AllExpense }
+const SearchExpense = async (req, res) => {
+    try {
+        // let findTitle = await ExpenseModel.findOne({title: req.params.title});
+        let findTitle = await ExpenseModel.findOne({
+            title: {
+                $regex: new RegExp(req.params.title, "i")
+            }
+        });
+
+        if (!findTitle) {
+            return res.status(401).json({
+                success: false,
+                message: 'Title not found!',
+            })
+        }
+
+        return res.status(201).json({
+            success: true,
+            message: "Expense Founded",
+            Expense: findTitle,
+        });
+    } catch (err) {
+        // res.send(err.message);
+        return res.status(201).json({
+            success: false,
+            message: err.message,
+        });
+    }
+
+}
+
+module.exports = { CreateExpense, UpdateExpense, AllExpense, SearchExpense }
