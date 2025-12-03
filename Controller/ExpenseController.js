@@ -70,7 +70,7 @@ const AllExpense = async (req, res) => {
 const SearchExpense = async (req, res) => {
     try {
         // let findTitle = await ExpenseModel.findOne({title: req.params.title});
-        let findTitle = await ExpenseModel.findOne({
+        let findTitle = await ExpenseModel.find({
             title: {
                 $regex: new RegExp(req.params.title, "i")
             }
@@ -95,7 +95,28 @@ const SearchExpense = async (req, res) => {
             message: err.message,
         });
     }
-
 }
 
-module.exports = { CreateExpense, UpdateExpense, AllExpense, SearchExpense }
+const DeleteExpense = async (req, res) => {
+    try {
+        let deleteExp = await ExpenseModel.findByIdAndDelete(req.params.id);
+
+        if (!deleteExp) {
+            return res.status(201).json({
+                success: true,
+                message: "Not found!",
+            });
+        }
+      
+
+        return res.status(201).json({
+            success: true,
+            message: "Deleted Successfully",
+            Expense: deleteExp,
+        });
+    } catch (err) {
+        res.send(err.message);
+    }
+}
+
+module.exports = { CreateExpense, UpdateExpense, AllExpense, SearchExpense, DeleteExpense }
