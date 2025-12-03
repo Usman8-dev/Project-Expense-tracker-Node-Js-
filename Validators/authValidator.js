@@ -23,3 +23,11 @@ exports.RegisterValidator = [
         .notEmpty().withMessage('Age is required')
         .isInt({ min: 1, max: 120 }).withMessage('Age must be a valid number')
 ];
+exports.create_AND_upadte_Validation = [
+    body('title')
+        .notEmpty().withMessage('Title is required'),
+
+    body('amount')
+        .notEmpty().withMessage('Amount is required')
+        .isInt({ min: 1 }).withMessage('Amount must be a valid number')
+];

@@ -1,15 +1,19 @@
 const express = require('express');
 const router = express.Router();
+const { IsLoginUser } = require('../Middlewares/IsLoginUser');
 
-const {CreateExpense, UpdateExpense, AllExpense, SearchExpense, DeleteExpense}  = require('../Controller/ExpenseController');
+const { CreateExpense, UpdateExpense, AllExpense, SearchExpense, DeleteExpense } = require('../Controller/ExpenseController');
 
-router.get('/', function(req, res){
+const { create_AND_upadte_Validation } = require('../Validators/authValidator');
+const { validate } = require('../Middlewares/validate');
+
+router.get('/', function (req, res) {
     res.send('Expense tracker is running')
 })
-router.post('/create', CreateExpense);
-router.put('/update/:id', UpdateExpense);
-router.get('/AllExpense', AllExpense);
-router.get('/SearchExpense/:title', SearchExpense);
-router.delete('/delete/:id', DeleteExpense);
+router.post('/create', IsLoginUser, create_AND_upadte_Validation, validate, CreateExpense);
+router.put('/update/:id', IsLoginUser, create_AND_upadte_Validation, validate, UpdateExpense);
+router.get('/AllExpense', IsLoginUser, AllExpense);
+router.get('/SearchExpense/:title', IsLoginUser, SearchExpense);
+router.delete('/delete/:id', IsLoginUser, DeleteExpense);
 
 module.exports = router;
