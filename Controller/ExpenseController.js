@@ -8,7 +8,9 @@ const CreateExpense = async (req, res) => {
             title,
             description,
             amount,
+            createdBy: req.user.id,
         })
+        await exp.save();
         return res.status(201).json({
             success: true,
             message: "Expense Created Successfully!",
@@ -53,7 +55,8 @@ const UpdateExpense = async (req, res) => {
 
 const AllExpense = async (req, res) => {
     try {
-        let allExp = await ExpenseModel.find();
+        let allExp = await ExpenseModel.find({ createdBy: req.user.id });
+        // .sort({ date: -1 })
         return res.status(201).json({
             success: true,
             message: "All Expenses",
@@ -61,8 +64,8 @@ const AllExpense = async (req, res) => {
         });
 
     } catch (err) {
-        res.send.status(401).json({
-            err: message,
+        return res.status(401).json({
+            err: err.message,
         })
     }
 }
@@ -71,6 +74,7 @@ const SearchExpense = async (req, res) => {
     try {
         // let findTitle = await ExpenseModel.findOne({title: req.params.title});
         let findTitle = await ExpenseModel.find({
+            createdBy: req.user.id,
             title: {
                 $regex: new RegExp(req.params.title, "i")
             }
@@ -107,7 +111,7 @@ const DeleteExpense = async (req, res) => {
                 message: "Not found!",
             });
         }
-      
+
 
         return res.status(201).json({
             success: true,
