@@ -6,6 +6,7 @@ const cookieParser = require('cookie-parser');
 // model 
 const UserModel = require('./Models/UserModel');
 const ExpenseModel = require('./Models/ExpenseModel');
+const CategoryModel = require('./Models/CategoryModel');
 
 // database 
 const db = require('./Config/connection-mongoose');
@@ -13,6 +14,7 @@ const db = require('./Config/connection-mongoose');
 // router 
 const userRouter = require('./Routers/userRouter');
 const ExpenseRouter = require('./Routers/ExpenseRouter');
+const CategoryRouter = require('./Routers/CategoryRouter');
 
 app.use(express.json());                    
 app.use(express.urlencoded({ extended: true }));
@@ -20,6 +22,7 @@ app.use(cookieParser());
 
 app.use('/user', userRouter);
 app.use('/expense', ExpenseRouter);
+app.use('/category', CategoryRouter);
 
 
 app.listen(3000, ()=>{
