@@ -50,4 +50,37 @@ const UpdateCategory = async (req, res) => {
     }
 }
 
-module.exports = { CreateCategory, UpdateCategory }
+const AllCategory = async (req, res) => {
+    try {
+        let allCategory = await CategoryModel.find({ createdBy: req.user.id }).sort({ date: -1 });
+        return res.status(201).json({
+            success: true,
+            message: "All Categories",
+            All_Expenses: allCategory,
+        });
+    } catch (err) {
+        res.send(err.message);
+    }
+}
+
+const DeleteCategory = async (req, res) => {
+    try {
+        let deleteCategory = await CategoryModel.findByIdAndDelete(req.params.id);
+
+        if (!deleteCategory) {
+            return res.status(201).json({
+                success: true,
+                message: "Not found!",
+            });
+        }
+        return res.status(201).json({
+            success: true,
+            message: "Deleted Successfully",
+            Expense: deleteCategory,
+        });
+    } catch (err) {
+        res.send(err.message);
+    }
+}
+
+module.exports = { CreateCategory, UpdateCategory, AllCategory, DeleteCategory }
