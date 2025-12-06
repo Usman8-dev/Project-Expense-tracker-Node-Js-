@@ -4,16 +4,21 @@ const ExpenseModel = mongoose.Schema({
     title: String,
     description: String,
     amount: Number,
-     date: {
+    date: {
         type: Date,
         default: Date.now
-   },
-    createdBy: [
-            {
-                type: mongoose.Schema.Types.ObjectId,
-                ref: 'user',
-            }
-        ]
+    },
+    createdBy: 
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user',
+        }
+    ,
+    category_id: 
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'category',
+        }
 })
 
 module.exports = mongoose.model('expense', ExpenseModel);

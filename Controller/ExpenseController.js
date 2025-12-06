@@ -3,14 +3,16 @@ const ExpenseModel = require("../Models/ExpenseModel")
 
 const CreateExpense = async (req, res) => {
     try {
-        let { title, description, amount } = req.body;
+        let { title, description, amount, category_id } = req.body;
         let exp = await ExpenseModel.create({
             title,
             description,
             amount,
             createdBy: req.user.id,
+            category_id,
         })
         await exp.save();
+        await exp.populate("category_id");
         return res.status(201).json({
             success: true,
             message: "Expense Created Successfully!",
@@ -23,7 +25,7 @@ const CreateExpense = async (req, res) => {
 
 const UpdateExpense = async (req, res) => {
     try {
-        let { title, description, amount } = req.body;
+        let { title, description, amount,category_id } = req.body;
         let findExp = await ExpenseModel.findById(req.params.id);
         if (!findExp) {
             return res.status(404).json({
@@ -39,10 +41,12 @@ const UpdateExpense = async (req, res) => {
             title,
             description,
             amount,
+            category_id,
         }, {
             new: true,
         }
         )
+        await editExp.populate("category_id");
         return res.status(404).json({
             success: true,
             message: "Expense Updated Successfully",
