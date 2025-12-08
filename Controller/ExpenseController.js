@@ -88,7 +88,7 @@ const SearchExpense = async (req, res) => {
         if (!findTitle) {
             return res.status(401).json({
                 success: false,
-                message: 'Title not found!',
+                message: 'Title not found!!',
             })
         }
 
