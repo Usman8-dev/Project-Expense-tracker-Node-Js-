@@ -21,8 +21,21 @@ const ExpenseModel = mongoose.Schema({
     },
     type: {
         type: String,
-        enum: ['Expense', 'Income'], 
-    }
+        enum: ['Expense', 'Income'],
+    },
+    income: {
+        type: Number,
+        default: 0
+    },
+    expense: {
+        type: Number,
+        default: 0
+    },
+
+    total_balance: {
+        type: Number,
+        default: 0    
+    },
 })
 
 module.exports = mongoose.model('expense', ExpenseModel);
