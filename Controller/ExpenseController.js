@@ -1,92 +1,195 @@
 const ExpenseModel = require("../Models/ExpenseModel")
 const ExcelJS = require('exceljs');
-// const { startOfDay, endOfDay } = require('date-fns'); // Optional, but cleaner
 const { startOfDay, endOfDay } = require('date-fns');
 
 const CreateExpense = async (req, res) => {
     try {
+        // parse and validate incoming amount
         let { title, description, amount, category_id, type } = req.body;
-
-        // 1️⃣ Get last saved balance
-        const lastRecord = await ExpenseModel.find().sort({ date: -1 }).limit(1);
-        let lastBalance = lastRecord[0]?.total_balance || 0;
-
-        // 2️⃣ Determine income / expense value
-        let income = 0;
-        let expense = 0;
-
-        if (type === "Income") {
-            income = amount;
-            expense = 0;
-        } else if (type === "Expense") {
-            expense = amount;
-            income = 0;
+        const parsedAmount = Number(amount);
+        if (isNaN(parsedAmount)) {
+            return res.status(400).json({ success: false, message: "Invalid amount" });
         }
 
-        // 3️⃣ Calculate new total balance
-        const total_balance = type === "Income"
-            ? lastBalance + amount
-            : lastBalance - amount;
+        // 1. Get last saved record (most recent by date then _id)
+        const lastRecord = await ExpenseModel.findOne({createdBy: req.user.id}).sort({ date: -1, _id: -1 });
 
+        // 2. Ensure previous totals are numeric (defensive)
+        // const previousTotalIncome = Number(lastRecord?.total_income) || 0;
+        // const previousTotalExpense = Number(lastRecord?.total_expense) || 0;
 
-        let exp = await ExpenseModel.create({
+        let previousTotalIncome = 0;
+        let previousTotalExpense = 0;
+
+        if (lastRecord) {
+            previousTotalIncome = lastRecord.total_income;
+            previousTotalExpense = lastRecord.total_expense;
+        }
+
+        // 3. This record's income/expense (numbers)
+        const income = type === "Income" ? parsedAmount : 0;
+        const expense = type === "Expense" ? parsedAmount : 0;
+
+        // 4. Updated cumulative totals (numbers)
+        const total_income = previousTotalIncome + income;
+        const total_expense = previousTotalExpense + expense;
+
+        // 5. Running balance
+        const total_balance = total_income - total_expense;
+
+        // 6. Create the record
+        const exp = await ExpenseModel.create({
             title,
             description,
-            amount,
+            amount: parsedAmount,
+            income,
+            expense,
+            total_income,
+            total_expense,
+            total_balance,
             createdBy: req.user.id,
             category_id,
             type,
-            income,
-            expense,
-            total_balance,
-        })
+        });
 
-        await exp.save();
         await exp.populate("category_id");
+
         return res.status(201).json({
             success: true,
             message: "Expense Created Successfully!",
-            expense: exp,
+            expense: exp
         });
+
     } catch (err) {
-        res.send(err.message);
+        return res.status(500).json({ success: false, message: err.message });
     }
-}
+};
+
+
+
+// const UpdateExpense = async (req, res) => {
+//     try {
+//         let { title, description, amount, category_id, type } = req.body;
+//         let findExp = await ExpenseModel.findById(req.params.id);
+//         if (!findExp) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: "Expense not found!"
+//             });
+//         }
+
+//         let editExp = await ExpenseModel.findOneAndUpdate(
+//             {
+//                 _id: req.params.id,
+//             }, {
+//             title,
+//             description,
+//             amount,
+//             category_id,
+//             type,
+//         }, {
+//             new: true,
+//         }
+//         )
+//         await editExp.populate("category_id");
+//         return res.status(404).json({
+//             success: true,
+//             message: "Expense Updated Successfully",
+//             Update_Expense: editExp,
+//         });
+//     } catch (err) {
+//         res.send(err.message);
+//     }
+// }
+
 
 const UpdateExpense = async (req, res) => {
     try {
-        let { title, description, amount, category_id, type } = req.body;
-        let findExp = await ExpenseModel.findById(req.params.id);
-        if (!findExp) {
+        const { title, description, amount, category_id, type } = req.body;
+
+        // 1. Find the old record
+        let oldRecord = await ExpenseModel.findById(req.params.id);
+        if (!oldRecord || oldRecord.createdBy.toString() !== userId) {
             return res.status(404).json({
                 success: false,
                 message: "Expense not found!"
             });
         }
 
-        let editExp = await ExpenseModel.findOneAndUpdate(
-            {
-                _id: req.params.id,
-            }, {
-            title,
-            description,
-            amount,
-            category_id,
-            type,
-        }, {
-            new: true,
+        // 2. Get latest cumulative totals
+        const lastRecord = await ExpenseModel.findOne({createdBy: req.user.id}).sort({ date: -1, _id: -1 });
+
+        let previousTotalIncome = Number(lastRecord?.total_income) || 0;
+        let previousTotalExpense = Number(lastRecord?.total_expense) || 0;
+
+        // ----------------------------------------
+        // 🟡 STEP A: REVERSE OLD RECORD VALUES
+        // ----------------------------------------
+        if (oldRecord.type === "Income") {
+            previousTotalIncome -= oldRecord.amount;
+        } else {
+            previousTotalExpense -= oldRecord.amount;
         }
-        )
-        await editExp.populate("category_id");
-        return res.status(404).json({
+
+        // ----------------------------------------
+        // 🟢 STEP B: APPLY UPDATED RECORD VALUES
+        // ----------------------------------------
+        let newIncome = 0;
+        let newExpense = 0;
+
+        if (type === "Income") {
+            newIncome = amount;
+            previousTotalIncome += Number(amount);
+        } else {
+            newExpense = amount;
+            previousTotalExpense += Number(amount);
+        }
+
+        // ----------------------------------------
+        // 🔵 STEP C: CALCULATE TOTAL BALANCE
+        // ----------------------------------------
+        const newTotalBalance = previousTotalIncome - previousTotalExpense;
+
+        // ----------------------------------------
+        // 🔴 STEP D: UPDATE THE RECORD
+        // ----------------------------------------
+        let updatedRecord = await ExpenseModel.findOneAndUpdate(
+            { _id: req.params.id },
+            {
+                title,
+                description,
+                amount :Number(amount),
+                category_id,
+                type,
+
+                // update individual entry values
+                income: newIncome,
+                expense: newExpense,
+
+                // update cumulative values
+                total_income: previousTotalIncome,
+                total_expense: previousTotalExpense,
+                total_balance: newTotalBalance
+            },
+            { new: true }
+        );
+
+        await updatedRecord.populate("category_id");
+
+        return res.status(200).json({
             success: true,
             message: "Expense Updated Successfully",
-            Update_Expense: editExp,
+            updated_expense: updatedRecord
         });
+
     } catch (err) {
-        res.send(err.message);
+        return res.status(500).json({
+            success: false,
+            message: err.message
+        });
     }
-}
+};
+
 
 const AllExpense = async (req, res) => {
     try {

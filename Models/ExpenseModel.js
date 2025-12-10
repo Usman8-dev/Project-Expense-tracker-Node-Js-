@@ -36,6 +36,14 @@ const ExpenseModel = mongoose.Schema({
         type: Number,
         default: 0    
     },
+    total_income: {
+        type: Number,
+        default: 0
+    },
+    total_expense: {
+        type: Number,
+        default: 0
+    }
 })
 
 module.exports = mongoose.model('expense', ExpenseModel);
