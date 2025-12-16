@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 // model 
 const UserModel = require('./Models/UserModel');
 const ExpenseModel = require('./Models/ExpenseModel');
+const categoryModel = require('./Models/CategoryModel');
 
 // database 
 const db = require('./Config/connection-mongoose');
