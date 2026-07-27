@@ -70,6 +70,7 @@ const LoginUser = async (req, res) => {
                         success: true,
                         message: "Login successfully",
                         user: finduserLogin,
+                        token: token,
                     });
                 } else {
                     return res.status(401).json({
