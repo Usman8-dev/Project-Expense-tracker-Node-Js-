@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const debg = require('debug')("app: db");
 
 mongoose
-.connect(`${process.env.MONGODB_URI}/Expense_Tracker`)
+.connect(`${process.env.MONGODB_URI}/test`)
 .then(function(){
     debg('Connected Successfully!!')
 })

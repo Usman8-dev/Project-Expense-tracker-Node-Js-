@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require("cors");
 const app = express();
 const dotenv = require('dotenv').config();
 const cookieParser = require('cookie-parser');
@@ -14,6 +15,7 @@ const userRouter = require('./Routers/userRouter');
 const ExpenseRouter = require('./Routers/ExpenseRouter');
 const CategoryRouter = require('./Routers/CategoryRouter');
 
+app.use(cors({ origin: "http://localhost:5173" }));
 app.use(express.json());                    
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
