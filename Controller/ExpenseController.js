@@ -131,7 +131,10 @@ const GetExpenseById = async (req, res) => {
 
 const AllExpense = async (req, res) => {
   try {
-    let allExp = await ExpenseModel.find({ createdBy: req.user.id }).sort({ date: -1 });
+    let allExp = await ExpenseModel.find({ createdBy: req.user.id })
+    .populate("category_id", "name") 
+    .sort({ date: -1 });
+
     return res.status(201).json({
       success: true,
       message: "All Expenses",
