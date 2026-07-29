@@ -379,7 +379,6 @@ const DeleteExpense = async (req, res) => {
 //   }
 // };
 
-
 const exportExpensesToExcel = async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -431,9 +430,9 @@ const exportExpensesToExcel = async (req, res) => {
       { width: 3 }, // A margin
       { width: 16 }, // B Date
       { width: 22 }, // C Title
-      { width: 32 }, // D Description
-      { width: 18 }, // E Category
-      { width: 14 }, // F Type
+      { width: 14 }, // D Type          ← moved here
+      { width: 32 }, // E Description
+      { width: 18 }, // F Category
       { width: 18 }, // G Amount
       { width: 3 }, // H margin
     ];
@@ -717,11 +716,11 @@ const exportExpensesToExcel = async (req, res) => {
     const headers = [
       "Date",
       "Title",
+      "Type",
       "Description",
       "Category",
-      "Type",
       "Amount",
-    ];
+    ]; // ← reordered
     const headerRow = ws.getRow(headerRowNum);
     headers.forEach((h, i) => {
       const cell = headerRow.getCell(2 + i); // starts at column B
@@ -752,19 +751,19 @@ const exportExpensesToExcel = async (req, res) => {
         year: "numeric",
       });
       row.getCell(3).value = exp.title || "-";
-      row.getCell(4).value = exp.description || "-";
-      row.getCell(5).value = exp.category_id?.name || "Uncategorized";
-      row.getCell(6).value = exp.type;
-      row.getCell(7).value = exp.amount;
+      row.getCell(4).value = exp.type; // ← Type now in column D
+      row.getCell(5).value = exp.description || "-"; // ← Description moved to E
+      row.getCell(6).value = exp.category_id?.name || "Uncategorized"; // ← Category moved to F
+      row.getCell(7).value = exp.amount; // ← Amount stays in G
       row.getCell(7).numFmt = '"Rs. "#,##0.00';
       row.getCell(7).alignment = { horizontal: "right" };
       row.getCell(7).font = { bold: true, color: { argb: "FF0f172a" } };
 
-      row.getCell(6).alignment = { horizontal: "center" };
+      row.getCell(4).alignment = { horizontal: "center" }; // ← Type styling now on column D
       if (exp.type === "Income") {
-        row.getCell(6).font = { color: { argb: "FF10b981" }, bold: true };
+        row.getCell(4).font = { color: { argb: "FF10b981" }, bold: true };
       } else {
-        row.getCell(6).font = { color: { argb: "FFef4444" }, bold: true };
+        row.getCell(4).font = { color: { argb: "FFef4444" }, bold: true };
       }
 
       const bg = idx % 2 === 0 ? "FFF8FAFC" : "FFFFFFFF";
