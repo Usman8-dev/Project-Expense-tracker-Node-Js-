@@ -103,6 +103,32 @@ const UpdateExpense = async (req, res) => {
   }
 };
 
+const GetExpenseById = async (req, res) => {
+  try {
+    const expense = await ExpenseModel.findById(req.params.id).populate(
+      "category_id"
+    );
+
+    if (!expense || expense.createdBy.toString() !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: "Expense not found!",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Expense fetched successfully",
+      expense,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 const AllExpense = async (req, res) => {
   try {
     let allExp = await ExpenseModel.find({ createdBy: req.user.id }).sort({ date: -1 });
@@ -346,4 +372,4 @@ const exportExpensesToExcel = async (req, res) => {
   }
 };
 
-module.exports = { CreateExpense, UpdateExpense, AllExpense, SearchExpense, DeleteExpense, exportExpensesToExcel }
+module.exports = { CreateExpense, UpdateExpense,GetExpenseById, AllExpense, SearchExpense, DeleteExpense, exportExpensesToExcel }

@@ -56,7 +56,7 @@ const AllCategory = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "All Categories",
-            All_Expenses: allCategory,
+            All_Categories: allCategory,
         });
     } catch (err) {
         res.send(err.message);
