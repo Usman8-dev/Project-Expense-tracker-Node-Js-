@@ -63,6 +63,30 @@ const AllCategory = async (req, res) => {
     }
 }
 
+const GetCategoryById = async (req, res) => {
+  try {
+    const category = await CategoryModel.findById(req.params.id);
+
+    if (!category || category.createdBy.toString() !== req.user.id) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found!",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Category fetched successfully",
+      category,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
 const DeleteCategory = async (req, res) => {
     try {
         let deleteCategory = await CategoryModel.findByIdAndDelete(req.params.id);
@@ -83,4 +107,4 @@ const DeleteCategory = async (req, res) => {
     }
 }
 
-module.exports = { CreateCategory, UpdateCategory, AllCategory, DeleteCategory }
+module.exports = { CreateCategory, UpdateCategory, AllCategory, DeleteCategory, GetCategoryById }
