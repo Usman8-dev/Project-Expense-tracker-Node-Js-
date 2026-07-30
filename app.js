@@ -15,7 +15,8 @@ const userRouter = require('./Routers/userRouter');
 const ExpenseRouter = require('./Routers/ExpenseRouter');
 const CategoryRouter = require('./Routers/CategoryRouter');
 
-app.use(cors({ origin: "http://localhost:5173" }));
+// app.use(cors({ origin: "http://localhost:5173" }));
+app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());                    
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
@@ -24,6 +25,8 @@ app.use('/expense', ExpenseRouter);
 app.use('/category', CategoryRouter);
 
 
-app.listen(3000, ()=>{
-    console.log('server is running');  
-});
+// app.listen(3000, ()=>{
+//     console.log('server is running');  
+// });
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
