@@ -30,7 +30,7 @@ const recalculateAllTotals = async (userId) => {
 
 const CreateExpense = async (req, res) => {
   try {
-    let { title, description, amount, category_id, type } = req.body;
+    let { title, description, amount, category_id, type, date  } = req.body;
     const parsedAmount = Number(amount);
     if (isNaN(parsedAmount)) {
       return res
@@ -46,6 +46,7 @@ const CreateExpense = async (req, res) => {
       createdBy: req.user.id,
       category_id,
       type,
+      date: date || Date.now(),
     });
 
     // Recalculate all running totals from scratch
@@ -67,7 +68,7 @@ const CreateExpense = async (req, res) => {
 
 const UpdateExpense = async (req, res) => {
   try {
-    const { title, description, amount, category_id, type } = req.body;
+    const { title, description, amount, category_id, type, date } = req.body;
 
     let oldRecord = await ExpenseModel.findById(req.params.id);
     if (!oldRecord || oldRecord.createdBy.toString() !== req.user.id) {
@@ -86,6 +87,8 @@ const UpdateExpense = async (req, res) => {
         amount: Number(amount),
         category_id,
         type,
+        // date: Date.now(),
+        date: date || undefined,
       },
       { new: true },
     );
