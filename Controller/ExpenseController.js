@@ -1,6 +1,49 @@
 const ExpenseModel = require("../Models/ExpenseModel");
 const ExcelJS = require("exceljs");
-const { startOfDay, endOfDay } = require("date-fns");
+
+// Asia/Karachi (Pakistan) is UTC+5 with NO daylight saving time.
+const PK_UTC_OFFSET = "+05:00";
+// Already-qualified ISO strings contain "Z" or an explicit offset like +05:00 / -0500.
+const HAS_TIMEZONE = /[zZ]|[+-]\d{2}:?\d{2}$/;
+
+/**
+ * Parses a date value coming from the client as Pakistan local time.
+ *
+ * MongoDB stores BSON Date (a UTC instant). The frontend sends naive values like
+ * "2024-06-15" or "2024-06-15T18:30" which JavaScript would otherwise read as
+ * UTC, shifting them 5 hours behind Pakistan time (and sometimes onto the wrong
+ * day near midnight). This helper treats such naive values as Asia/Karachi
+ * wall-clock time and returns the exact UTC Date that should be stored.
+ *
+ * Values that already include a timezone/offset ("2024-06-15T18:30:00.000Z",
+ * "2024-06-15T18:30+05:00", ...) are absolute instants and are passed through
+ * as-is. Invalid input returns `undefined`.
+ */
+const parsePakistanDate = (value) => {
+  if (value == null || value === "") return undefined;
+  if (value instanceof Date) return isNaN(value) ? undefined : value;
+  if (typeof value === "number") {
+    const d = new Date(value);
+    return isNaN(d) ? undefined : d;
+  }
+
+  const str = String(value).trim();
+  if (!str) return undefined;
+
+  // Already an absolute instant (contains Z or an explicit offset) → use as-is.
+  if (HAS_TIMEZONE.test(str)) {
+    const d = new Date(str);
+    return isNaN(d) ? undefined : d;
+  }
+
+  // Normalize optional space separator ("2024-06-15 18:30") to "T".
+  let normalized = str.replace(/\s+/, "T");
+  // Date-only "YYYY-MM-DD" → midnight Pakistan time.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(normalized)) normalized += "T00:00:00";
+
+  const d = new Date(`${normalized}${PK_UTC_OFFSET}`);
+  return isNaN(d) ? undefined : d;
+};
 
 const recalculateAllTotals = async (userId) => {
   const allRecords = await ExpenseModel.find({ createdBy: userId }).sort({
@@ -38,6 +81,14 @@ const CreateExpense = async (req, res) => {
         .json({ success: false, message: "Invalid amount" });
     }
 
+    // Interpret the client date as Pakistan local time before storing it (UTC).
+    const parsedDate = parsePakistanDate(date);
+    if (date && !parsedDate) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid date format" });
+    }
+
     // Create the record (no cumulative calculations — recalculateAllTotals handles it)
     const exp = await ExpenseModel.create({
       title,
@@ -46,7 +97,7 @@ const CreateExpense = async (req, res) => {
       createdBy: req.user.id,
       category_id,
       type,
-      date: date || Date.now(),
+      date: parsedDate || new Date(),
     });
 
     // Recalculate all running totals from scratch
@@ -78,6 +129,16 @@ const UpdateExpense = async (req, res) => {
       });
     }
 
+    // Interpret the client date as Pakistan local time before storing it (UTC).
+    // When `date` is omitted this stays undefined → mongoose keeps the old value.
+    const parsedDate = parsePakistanDate(date);
+    if (date && !parsedDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format",
+      });
+    }
+
     // Update the record's own fields
     let updatedRecord = await ExpenseModel.findOneAndUpdate(
       { _id: req.params.id },
@@ -88,7 +149,7 @@ const UpdateExpense = async (req, res) => {
         category_id,
         type,
         // date: Date.now(),
-        date: date || undefined,
+        date: parsedDate,
       },
       { new: true },
     );
@@ -396,8 +457,13 @@ const exportExpensesToExcel = async (req, res) => {
       });
     }
 
-    const start = startOfDay(new Date(startDate));
-    const end = endOfDay(new Date(endDate));
+    // Interpret the range as Pakistan local time (UTC+5, no DST) so the report
+    // matches the exact Pakistan days the user selects.
+    const start = parsePakistanDate(startDate);
+    const rawEnd = parsePakistanDate(endDate);
+    const end = rawEnd
+      ? new Date(rawEnd.getTime() + 24 * 60 * 60 * 1000 - 1) // last ms of the Pakistan end day
+      : undefined;
 
     if (isNaN(start) || isNaN(end) || start > end) {
       return res.status(400).json({ message: "Invalid date range" });
@@ -461,7 +527,7 @@ const exportExpensesToExcel = async (req, res) => {
     // === PERIOD ===
     ws.mergeCells("B3:G3");
     const periodCell = ws.getCell("B3");
-    periodCell.value = `${start.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} – ${end.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}   |   ${expenses.length} Transactions`;
+    periodCell.value = `${start.toLocaleDateString("en-IN", { timeZone: "Asia/Karachi", day: "numeric", month: "short", year: "numeric" })} – ${end.toLocaleDateString("en-IN", { timeZone: "Asia/Karachi", day: "numeric", month: "short", year: "numeric" })}   |   ${expenses.length} Transactions`;
     periodCell.font = { size: 12, italic: true, color: { argb: "FF64748b" } };
     periodCell.alignment = { horizontal: "center" };
     ws.getRow(3).height = 22;
@@ -749,6 +815,7 @@ const exportExpensesToExcel = async (req, res) => {
     expenses.forEach((exp, idx) => {
       const row = ws.getRow(currentRow);
       row.getCell(2).value = exp.date.toLocaleDateString("en-IN", {
+        timeZone: "Asia/Karachi",
         day: "numeric",
         month: "short",
         year: "numeric",
