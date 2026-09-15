@@ -20,6 +20,12 @@ app.use(cors({ origin: process.env.CLIENT_URL }));
 app.use(express.json());                    
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// Lightweight health-check endpoint for external keep-alive pings (Render free tier)
+app.get('/health', (req, res) => {
+    res.status(200).json({ status: 'ok', uptime: process.uptime() });
+});
+
 app.use('/user', userRouter);
 app.use('/expense', ExpenseRouter);
 app.use('/category', CategoryRouter);
