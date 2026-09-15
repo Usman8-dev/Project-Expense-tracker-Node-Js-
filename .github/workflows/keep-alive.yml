@@ -1,10 +1,13 @@
 name: Keep Render Alive
 
-# Runs every 5 minutes (GitHub Actions minimum). This pings the deployed
-# Render URL so the free-tier service never spins down / cold-starts.
+# GitHub Actions cron is "best effort" and can be delayed a few minutes during
+# periods of high load (especially near the start of every hour). To make the
+# ping robust, TWO staggered schedules are registered — if one is delayed or
+# skipped, the other still fires, so the Render service never idles 15+ min.
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *'      # fires at :00, :05, :10, ...
+    - cron: '2-59/5 * * * *'   # fires at :02, :07, :12, ...
   workflow_dispatch: # allows manual run from the Actions tab
 
 jobs:
@@ -13,6 +16,6 @@ jobs:
     steps:
       - name: Ping Render server
         run: |
-          curl -fsS -m 30 --retry 2 "${{ secrets.RENDER_URL }}/health" \
+          curl -fsS -m 30 --retry 3 --retry-delay 5 "${{ secrets.RENDER_URL }}/health" \
             && echo "Ping OK" \
             || echo "Ping failed (check RENDER_URL secret)"
