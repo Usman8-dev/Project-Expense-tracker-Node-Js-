@@ -14,10 +14,13 @@ const CreateCategory = async (req, res) => {
         return res.status(201).json({
             success: true,
             message: "Category Created Successfully!",
+            // `category` is the key the frontend reads; `expense` is kept so
+            // older clients keep working.
+            category,
             expense: category,
         });
     } catch (err) {
-        res.send(err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
 }
 const UpdateCategory = async (req, res) => {
@@ -43,23 +46,26 @@ const UpdateCategory = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Category Updated Successfully",
+            category: editCategory,
             Update_Expense: editCategory,
         });
     } catch (err) {
-        res.send(err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
 }
 
 const AllCategory = async (req, res) => {
     try {
         let allCategory = await CategoryModel.find({ createdBy: req.user.id }).sort({ date: -1 });
-        return res.status(201).json({
+        // 200 (not 201): the service worker only caches successful GET
+        // responses, so 201 would leave the categories unavailable offline.
+        return res.status(200).json({
             success: true,
             message: "All Categories",
             All_Categories: allCategory,
         });
     } catch (err) {
-        res.send(err.message);
+        res.status(500).json({ success: false, message: err.message });
     }
 }
 
@@ -97,13 +103,16 @@ const DeleteCategory = async (req, res) => {
                 message: "Not found!",
             });
         }
-        return res.status(201).json({
+        return res.status(200).json({
             success: true,
             message: "Deleted Successfully",
+            category: deleteCategory,
             Expense: deleteCategory,
         });
     } catch (err) {
-        res.send(err.message);
+        // Must be an error status: res.send() returns 200, which would make
+        // the offline outbox drop a delete that never happened.
+        res.status(500).json({ success: false, message: err.message });
     }
 }
 

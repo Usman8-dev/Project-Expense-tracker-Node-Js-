@@ -204,14 +204,17 @@ const AllExpense = async (req, res) => {
       .populate("category_id", "name")
       .sort({ date: -1 });
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: "All Expenses",
       All_Expenses: allExp,
     });
   } catch (err) {
-    return res.status(401).json({
-      err: err.message,
+    // 500, not 401: a transient database error must not log the user out,
+    // and the service worker only caches 200 responses.
+    return res.status(500).json({
+      success: false,
+      message: err.message,
     });
   }
 };
@@ -232,13 +235,13 @@ const SearchExpense = async (req, res) => {
       });
     }
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: "Expense Founded",
       Expense: findTitle,
     });
   } catch (err) {
-    return res.status(201).json({
+    return res.status(500).json({
       success: false,
       message: err.message,
     });
@@ -261,13 +264,15 @@ const DeleteExpense = async (req, res) => {
       await recalculateAllTotals(deleteExp.createdBy.toString());
     }
 
-    return res.status(201).json({
+    return res.status(200).json({
       success: true,
       message: "Deleted Successfully",
       Expense: deleteExp,
     });
   } catch (err) {
-    res.send(err.message);
+    // res.send() answers 200, so the client (and the offline outbox) would
+    // report a delete that never happened.
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
