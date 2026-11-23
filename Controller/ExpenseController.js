@@ -285,7 +285,7 @@ const GetMonthlyFolders = async (req, res) => {
       .populate("category_id", "name")
       .sort({ date: -1 });
 
-    // 2. Fetch custom user-created folders
+    // 2. Fetch ONLY custom user-created folders (no auto-generated or mock folders)
     const customFolders = await FolderModel.find({ createdBy: userId }).sort({
       createdAt: -1,
     });
@@ -295,127 +295,96 @@ const GetMonthlyFolders = async (req, res) => {
       "July", "August", "September", "October", "November", "December"
     ];
 
-    const foldersMap = new Map();
-
     let totalIncomeAll = 0;
     let totalExpenseAll = 0;
 
-    // Aggregate by Month & Year (or explicit folder)
     for (const exp of expenses) {
       const amt = Number(exp.amount) || 0;
-      const isIncome = exp.type === "Income";
-      const isExpense = exp.type === "Expense";
+      if (exp.type === "Income") totalIncomeAll += amt;
+      else if (exp.type === "Expense") totalExpenseAll += amt;
+    }
 
-      if (isIncome) totalIncomeAll += amt;
-      else if (isExpense) totalExpenseAll += amt;
+    // Build folder summaries strictly for user-created custom folders
+    const monthlyFolders = customFolders.map((cf) => {
+      const folderTitle = (cf.name || "").trim();
+      const targetLower = folderTitle.toLowerCase();
 
-      let folderName = exp.folder;
-      let monthName = "";
-      let yearVal = 2026;
-
-      const d = exp.date ? new Date(exp.date) : null;
-      if (d && !isNaN(d.getTime())) {
-        monthName = monthNames[d.getMonth()];
-        yearVal = d.getFullYear();
-        if (!folderName) {
-          folderName = `${monthName} ${yearVal}`;
+      const matchingExpenses = expenses.filter((exp) => {
+        if (exp.folder && exp.folder.trim().toLowerCase() === targetLower) {
+          return true;
         }
-      } else if (!folderName) {
-        folderName = "Uncategorized";
+        if (exp.date) {
+          const d = new Date(exp.date);
+          if (!isNaN(d.getTime())) {
+            const mName = monthNames[d.getMonth()].toLowerCase();
+            const yStr = String(d.getFullYear());
+            if (`${mName} ${yStr}` === targetLower) {
+              return true;
+            }
+          }
+        }
+        return false;
+      });
+
+      let totalIncome = 0;
+      let totalExpense = 0;
+
+      for (const exp of matchingExpenses) {
+        const amt = Number(exp.amount) || 0;
+        if (exp.type === "Income") totalIncome += amt;
+        else if (exp.type === "Expense") totalExpense += amt;
       }
 
-      if (!foldersMap.has(folderName)) {
-        foldersMap.set(folderName, {
-          id: folderName,
-          name: folderName,
-          month: monthName,
-          year: yearVal,
-          theme: "cyan",
-          count: 0,
-          totalIncome: 0,
-          totalExpense: 0,
-          balance: 0,
-          transactions: [],
-        });
-      }
-
-      const f = foldersMap.get(folderName);
-      f.count += 1;
-      if (isIncome) f.totalIncome += amt;
-      else if (isExpense) f.totalExpense += amt;
-      f.balance = f.totalIncome - f.totalExpense;
-      f.transactions.push(exp);
-    }
-
-    // Merge any custom folders that might have 0 transactions yet
-    for (const cf of customFolders) {
-      if (!foldersMap.has(cf.name)) {
-        foldersMap.set(cf.name, {
-          id: cf._id.toString(),
-          _id: cf._id,
-          name: cf.name,
-          month: cf.month || "",
-          year: cf.year || "",
-          theme: cf.theme || "cyan",
-          count: 0,
-          totalIncome: 0,
-          totalExpense: 0,
-          balance: 0,
-          transactions: [],
-          isCustom: true,
-        });
-      } else {
-        const existing = foldersMap.get(cf.name);
-        existing._id = cf._id;
-        if (cf.theme) existing.theme = cf.theme;
-        existing.isCustom = true;
-      }
-    }
-
-    // Default reference mockup months if user's account is brand new / sparse
-    const defaultMockMonths = [
-      { name: "October 2026", theme: "cyan", isNeon: true, defaultIncome: 3500, defaultExpense: 1751, defaultCount: 15 },
-      { name: "September 2026", theme: "purple", defaultIncome: 3500, defaultExpense: 732, defaultCount: 12 },
-      { name: "August 2026", theme: "amber", defaultIncome: 3500, defaultExpense: 300, defaultCount: 13 },
-      { name: "July 2026", theme: "purple", defaultIncome: 3500, defaultExpense: 450, defaultCount: 16 },
-    ];
-
-    defaultMockMonths.forEach((dm) => {
-      if (!foldersMap.has(dm.name)) {
-        foldersMap.set(dm.name, {
-          id: dm.name,
-          name: dm.name,
-          month: dm.name.split(" ")[0],
-          year: dm.name.split(" ")[1],
-          theme: dm.theme,
-          isNeon: dm.isNeon || false,
-          count: dm.defaultCount,
-          totalIncome: dm.defaultIncome,
-          totalExpense: dm.defaultExpense,
-          balance: dm.defaultIncome - dm.defaultExpense,
-          transactions: [],
-          isDefaultMock: true,
-        });
-      } else {
-        const item = foldersMap.get(dm.name);
-        if (dm.theme) item.theme = dm.theme;
-        if (dm.isNeon) item.isNeon = true;
-      }
+      return {
+        id: cf._id.toString(),
+        _id: cf._id,
+        name: folderTitle,
+        month: cf.month || "",
+        year: cf.year || "",
+        theme: cf.theme || "cyan",
+        count: matchingExpenses.length,
+        totalIncome,
+        totalExpense,
+        balance: totalIncome - totalExpense,
+        transactions: matchingExpenses,
+        isCustom: true,
+      };
     });
 
-    const monthlyFolders = Array.from(foldersMap.values());
+    // Current active folder determination: first custom folder or current calendar month fallback
+    const activeFolder = monthlyFolders[0] || null;
 
-    // Current month determination
     const now = new Date();
-    const currentMonthKey = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
-    const activeFolder = foldersMap.get("October 2026") || foldersMap.get(currentMonthKey) || monthlyFolders[0];
+    const curMonthIndex = now.getMonth();
+    const curYear = now.getFullYear();
+    const currentMonthKey = `${monthNames[curMonthIndex]} ${curYear}`;
+
+    let currentMonthIncome = 0;
+    let currentMonthExpense = 0;
+    let currentMonthCount = 0;
+
+    if (activeFolder) {
+      currentMonthIncome = activeFolder.totalIncome;
+      currentMonthExpense = activeFolder.totalExpense;
+      currentMonthCount = activeFolder.count;
+    } else {
+      expenses.forEach((exp) => {
+        const d = exp.date ? new Date(exp.date) : null;
+        if (d && !isNaN(d.getTime()) && d.getMonth() === curMonthIndex && d.getFullYear() === curYear) {
+          const amt = Number(exp.amount) || 0;
+          if (exp.type === "Income") currentMonthIncome += amt;
+          else if (exp.type === "Expense") currentMonthExpense += amt;
+          currentMonthCount++;
+        }
+      });
+    }
 
     const currentMonthSummary = {
       name: activeFolder ? activeFolder.name : currentMonthKey,
-      income: activeFolder ? activeFolder.totalIncome : 0,
-      expense: activeFolder ? activeFolder.totalExpense : 0,
-      balance: activeFolder ? activeFolder.balance : 0,
-      transactionCount: activeFolder ? activeFolder.count : 0,
+      income: currentMonthIncome,
+      expense: currentMonthExpense,
+      balance: currentMonthIncome - currentMonthExpense,
+      transactionCount: currentMonthCount,
     };
 
     const overallSummary = {
