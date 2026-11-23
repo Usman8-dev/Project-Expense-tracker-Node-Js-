@@ -43,6 +43,10 @@ const ExpenseModel = mongoose.Schema({
     total_expense: {
         type: Number,
         default: 0
+    },
+    folder: {
+        type: String,
+        default: null
     }
 })
 

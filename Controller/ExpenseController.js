@@ -1,4 +1,5 @@
 const ExpenseModel = require("../Models/ExpenseModel");
+const FolderModel = require("../Models/FolderModel");
 const ExcelJS = require("exceljs");
 
 // Asia/Karachi (Pakistan) is UTC+5 with NO daylight saving time.
@@ -73,7 +74,7 @@ const recalculateAllTotals = async (userId) => {
 
 const CreateExpense = async (req, res) => {
   try {
-    let { title, description, amount, category_id, type, date  } = req.body;
+    let { title, description, amount, category_id, type, date, folder } = req.body;
     const parsedAmount = Number(amount);
     if (isNaN(parsedAmount)) {
       return res
@@ -98,6 +99,7 @@ const CreateExpense = async (req, res) => {
       category_id,
       type,
       date: parsedDate || new Date(),
+      folder: folder || null,
     });
 
     // Recalculate all running totals from scratch
@@ -119,7 +121,7 @@ const CreateExpense = async (req, res) => {
 
 const UpdateExpense = async (req, res) => {
   try {
-    const { title, description, amount, category_id, type, date } = req.body;
+    const { title, description, amount, category_id, type, date, folder } = req.body;
 
     let oldRecord = await ExpenseModel.findById(req.params.id);
     if (!oldRecord || oldRecord.createdBy.toString() !== req.user.id) {
@@ -150,6 +152,7 @@ const UpdateExpense = async (req, res) => {
         type,
         // date: Date.now(),
         date: parsedDate,
+        ...(folder !== undefined && { folder }),
       },
       { new: true },
     );
@@ -200,18 +203,328 @@ const GetExpenseById = async (req, res) => {
 
 const AllExpense = async (req, res) => {
   try {
-    let allExp = await ExpenseModel.find({ createdBy: req.user.id })
+    const query = { createdBy: req.user.id };
+    const { month, year, folder } = req.query;
+
+    const monthNames = [
+      "january", "february", "march", "april", "may", "june",
+      "july", "august", "september", "october", "november", "december"
+    ];
+
+    if (folder) {
+      const parts = folder.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        const mIdx = monthNames.indexOf(parts[0].toLowerCase());
+        const yNum = parseInt(parts[1], 10);
+        if (mIdx !== -1 && !isNaN(yNum)) {
+          const startDate = new Date(Date.UTC(yNum, mIdx, 1, 0, 0, 0));
+          const endDate = new Date(Date.UTC(yNum, mIdx + 1, 0, 23, 59, 59, 999));
+          query.$or = [
+            { date: { $gte: startDate, $lte: endDate } },
+            { folder: folder.trim() }
+          ];
+        } else {
+          query.folder = folder.trim();
+        }
+      } else {
+        query.folder = folder.trim();
+      }
+    } else if (month && year) {
+      const mIdx = typeof month === "number" ? month - 1 : monthNames.indexOf(String(month).toLowerCase());
+      const yNum = parseInt(year, 10);
+      if (mIdx !== -1 && !isNaN(yNum)) {
+        const startDate = new Date(Date.UTC(yNum, mIdx, 1, 0, 0, 0));
+        const endDate = new Date(Date.UTC(yNum, mIdx + 1, 0, 23, 59, 59, 999));
+        query.date = { $gte: startDate, $lte: endDate };
+      }
+    }
+
+    let allExp = await ExpenseModel.find(query)
       .populate("category_id", "name")
       .sort({ date: -1 });
+
+    let total_income = 0;
+    let total_expense = 0;
+    allExp.forEach((e) => {
+      if (e.type === "Income") total_income += Number(e.amount) || 0;
+      else if (e.type === "Expense") total_expense += Number(e.amount) || 0;
+    });
 
     return res.status(200).json({
       success: true,
       message: "All Expenses",
       All_Expenses: allExp,
+      summary: {
+        total_income,
+        total_expense,
+        total_balance: total_income - total_expense,
+        count: allExp.length,
+      },
     });
   } catch (err) {
     // 500, not 401: a transient database error must not log the user out,
     // and the service worker only caches 200 responses.
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Aggregates all user expenses by Month & Year folders,
+ * combines them with custom-created folders from FolderModel,
+ * and returns summary stats for each folder, plus the active current month summary.
+ */
+const GetMonthlyFolders = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 1. Fetch all expenses for this user
+    const expenses = await ExpenseModel.find({ createdBy: userId })
+      .populate("category_id", "name")
+      .sort({ date: -1 });
+
+    // 2. Fetch custom user-created folders
+    const customFolders = await FolderModel.find({ createdBy: userId }).sort({
+      createdAt: -1,
+    });
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    const foldersMap = new Map();
+
+    let totalIncomeAll = 0;
+    let totalExpenseAll = 0;
+
+    // Aggregate by Month & Year (or explicit folder)
+    for (const exp of expenses) {
+      const amt = Number(exp.amount) || 0;
+      const isIncome = exp.type === "Income";
+      const isExpense = exp.type === "Expense";
+
+      if (isIncome) totalIncomeAll += amt;
+      else if (isExpense) totalExpenseAll += amt;
+
+      let folderName = exp.folder;
+      let monthName = "";
+      let yearVal = 2026;
+
+      const d = exp.date ? new Date(exp.date) : null;
+      if (d && !isNaN(d.getTime())) {
+        monthName = monthNames[d.getMonth()];
+        yearVal = d.getFullYear();
+        if (!folderName) {
+          folderName = `${monthName} ${yearVal}`;
+        }
+      } else if (!folderName) {
+        folderName = "Uncategorized";
+      }
+
+      if (!foldersMap.has(folderName)) {
+        foldersMap.set(folderName, {
+          id: folderName,
+          name: folderName,
+          month: monthName,
+          year: yearVal,
+          theme: "cyan",
+          count: 0,
+          totalIncome: 0,
+          totalExpense: 0,
+          balance: 0,
+          transactions: [],
+        });
+      }
+
+      const f = foldersMap.get(folderName);
+      f.count += 1;
+      if (isIncome) f.totalIncome += amt;
+      else if (isExpense) f.totalExpense += amt;
+      f.balance = f.totalIncome - f.totalExpense;
+      f.transactions.push(exp);
+    }
+
+    // Merge any custom folders that might have 0 transactions yet
+    for (const cf of customFolders) {
+      if (!foldersMap.has(cf.name)) {
+        foldersMap.set(cf.name, {
+          id: cf._id.toString(),
+          _id: cf._id,
+          name: cf.name,
+          month: cf.month || "",
+          year: cf.year || "",
+          theme: cf.theme || "cyan",
+          count: 0,
+          totalIncome: 0,
+          totalExpense: 0,
+          balance: 0,
+          transactions: [],
+          isCustom: true,
+        });
+      } else {
+        const existing = foldersMap.get(cf.name);
+        existing._id = cf._id;
+        if (cf.theme) existing.theme = cf.theme;
+        existing.isCustom = true;
+      }
+    }
+
+    // Default reference mockup months if user's account is brand new / sparse
+    const defaultMockMonths = [
+      { name: "October 2026", theme: "cyan", isNeon: true, defaultIncome: 3500, defaultExpense: 1751, defaultCount: 15 },
+      { name: "September 2026", theme: "purple", defaultIncome: 3500, defaultExpense: 732, defaultCount: 12 },
+      { name: "August 2026", theme: "amber", defaultIncome: 3500, defaultExpense: 300, defaultCount: 13 },
+      { name: "July 2026", theme: "purple", defaultIncome: 3500, defaultExpense: 450, defaultCount: 16 },
+    ];
+
+    defaultMockMonths.forEach((dm) => {
+      if (!foldersMap.has(dm.name)) {
+        foldersMap.set(dm.name, {
+          id: dm.name,
+          name: dm.name,
+          month: dm.name.split(" ")[0],
+          year: dm.name.split(" ")[1],
+          theme: dm.theme,
+          isNeon: dm.isNeon || false,
+          count: dm.defaultCount,
+          totalIncome: dm.defaultIncome,
+          totalExpense: dm.defaultExpense,
+          balance: dm.defaultIncome - dm.defaultExpense,
+          transactions: [],
+          isDefaultMock: true,
+        });
+      } else {
+        const item = foldersMap.get(dm.name);
+        if (dm.theme) item.theme = dm.theme;
+        if (dm.isNeon) item.isNeon = true;
+      }
+    });
+
+    const monthlyFolders = Array.from(foldersMap.values());
+
+    // Current month determination
+    const now = new Date();
+    const currentMonthKey = `${monthNames[now.getMonth()]} ${now.getFullYear()}`;
+    const activeFolder = foldersMap.get("October 2026") || foldersMap.get(currentMonthKey) || monthlyFolders[0];
+
+    const currentMonthSummary = {
+      name: activeFolder ? activeFolder.name : currentMonthKey,
+      income: activeFolder ? activeFolder.totalIncome : 0,
+      expense: activeFolder ? activeFolder.totalExpense : 0,
+      balance: activeFolder ? activeFolder.balance : 0,
+      transactionCount: activeFolder ? activeFolder.count : 0,
+    };
+
+    const overallSummary = {
+      total_income: totalIncomeAll,
+      total_expense: totalExpenseAll,
+      total_balance: totalIncomeAll - totalExpenseAll,
+      total_transactions: expenses.length,
+    };
+
+    return res.status(200).json({
+      success: true,
+      monthlyFolders,
+      currentMonthSummary,
+      overallSummary,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+/**
+ * Custom Folder CRUD Operations
+ */
+const CreateFolder = async (req, res) => {
+  try {
+    const { name, month, year, theme } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Folder name is required",
+      });
+    }
+
+    const folderTitle = name.trim();
+
+    // Check if folder already exists for this user
+    let existing = await FolderModel.findOne({
+      createdBy: req.user.id,
+      name: folderTitle,
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: "A folder with this name already exists",
+      });
+    }
+
+    const newFolder = await FolderModel.create({
+      name: folderTitle,
+      month: month || null,
+      year: year || null,
+      theme: theme || "cyan",
+      createdBy: req.user.id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Folder created successfully",
+      folder: newFolder,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+const AllFolders = async (req, res) => {
+  try {
+    const folders = await FolderModel.find({ createdBy: req.user.id }).sort({
+      createdAt: -1,
+    });
+
+    return res.status(200).json({
+      success: true,
+      folders,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+const DeleteFolder = async (req, res) => {
+  try {
+    const folder = await FolderModel.findOneAndDelete({
+      _id: req.params.id,
+      createdBy: req.user.id,
+    });
+
+    if (!folder) {
+      return res.status(404).json({
+        success: false,
+        message: "Folder not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Folder deleted successfully",
+    });
+  } catch (err) {
     return res.status(500).json({
       success: false,
       message: err.message,
@@ -918,4 +1231,8 @@ module.exports = {
   SearchExpense,
   DeleteExpense,
   exportExpensesToExcel,
+  GetMonthlyFolders,
+  CreateFolder,
+  AllFolders,
+  DeleteFolder,
 };
