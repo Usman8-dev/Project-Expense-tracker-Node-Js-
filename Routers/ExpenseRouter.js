@@ -13,6 +13,7 @@ const {
   GetMonthlyFolders,
   CreateFolder,
   AllFolders,
+  EditFolder,
   DeleteFolder,
 } = require('../Controller/ExpenseController');
 
@@ -34,6 +35,7 @@ router.delete('/delete/:id', IsLoginUser, idempotency, DeleteExpense);
 // Monthly Folder routes
 router.post('/folder/create', IsLoginUser, idempotency, CreateFolder);
 router.get('/folder/all', IsLoginUser, AllFolders);
+router.put('/folder/update/:id', IsLoginUser, idempotency, EditFolder);
 router.delete('/folder/delete/:id', IsLoginUser, idempotency, DeleteFolder);
 
 router.post('/export',IsLoginUser ,exportExpensesToExcel);

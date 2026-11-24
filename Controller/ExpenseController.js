@@ -488,49 +488,52 @@ const EditFolder = async (req, res) => {
       });
     }
 
-    const updateFields = {};
-    if (name) updateFields.name = name.trim();
-    if (theme) updateFields.theme = theme;
-
-    const updatedFolder = await FolderModel.findOneAndUpdate(
-      { _id: id, createdBy: req.user.id },
-      { $set: updateFields },
-      { new: true, runValidators: true }
-    );
-
-    if (!updatedFolder) {
+    const folder = await FolderModel.findOne({
+      _id: id,
+      createdBy: req.user.id,
+    });
+    if (!folder) {
       return res.status(404).json({
         success: false,
         message: "Folder not found",
       });
     }
 
+    const oldName = folder.name;
+    const newName = name ? name.trim() : oldName;
+
+    // Guard against duplicate folder names for this user
+    if (newName !== oldName) {
+      const duplicate = await FolderModel.findOne({
+        createdBy: req.user.id,
+        name: newName,
+        _id: { $ne: id },
+      });
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message: "A folder with this name already exists",
+        });
+      }
+    }
+
+    folder.name = newName;
+    if (theme) folder.theme = theme;
+    await folder.save();
+
+    // Keep transactions pointing at the renamed folder
+    if (newName !== oldName) {
+      await ExpenseModel.updateMany(
+        { createdBy: req.user.id, folder: oldName },
+        { $set: { folder: newName } }
+      );
+    }
+
     return res.status(200).json({
       success: true,
       message: "Folder updated",
-      folder: updatedFolder,
+      folder,
     });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-// Delete folder – only if empty
-const EditFolder = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, theme } = req.body;
-    if (!name && !theme) {
-      return res.status(400).json({ success: false, message: 'Provide name or theme to update' });
-    }
-    const folder = await FolderModel.findOne({ _id: id, createdBy: req.user.id });
-    if (!folder) {
-      return res.status(404).json({ success: false, message: 'Folder not found' });
-    }
-    if (name) folder.name = name.trim();
-    if (theme) folder.theme = theme;
-    await folder.save();
-    return res.status(200).json({ success: true, message: 'Folder updated', folder });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }
@@ -551,65 +554,6 @@ const DeleteFolder = async (req, res) => {
     return res.status(200).json({ success: true, message: 'Folder deleted successfully' });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
-  }
-}; {
-  try {
-    const folder = await FolderModel.findOne({ _id: req.params.id, createdBy: req.user.id });
-    if (!folder) {
-      return res.status(404).json({ success: false, message: "Folder not found" });
-    }
-
-    // Check for any expenses belonging to this folder
-    const hasExpenses = await ExpenseModel.exists({
-      createdBy: req.user.id,
-      $or: [
-        { folder: folder.name },
-        // If folder name is month-year and expenses have no explicit folder, match by date
-        {
-          folder: { $exists: false },
-          date: {
-            $gte: new Date(`${folder.month} 1, ${folder.year}`),
-            $lte: new Date(`${folder.month} 31, ${folder.year}`),
-          },
-        },
-      ],
-    });
-
-    if (hasExpenses) {
-      return res.status(400).json({
-        success: false,
-        message: "Folder not empty – delete its transactions first",
-      });
-    }
-
-    await FolderModel.deleteOne({ _id: req.params.id, createdBy: req.user.id });
-    return res.status(200).json({ success: true, message: "Folder deleted successfully" });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-}; {
-  try {
-    const folder = await FolderModel.findOneAndDelete({
-      _id: req.params.id,
-      createdBy: req.user.id,
-    });
-
-    if (!folder) {
-      return res.status(404).json({
-        success: false,
-        message: "Folder not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Folder deleted successfully",
-    });
-  } catch (err) {
-    return res.status(500).json({
-      success: false,
-      message: err.message,
-    });
   }
 };
 
@@ -1315,5 +1259,6 @@ module.exports = {
   GetMonthlyFolders,
   CreateFolder,
   AllFolders,
+  EditFolder,
   DeleteFolder,
 };
