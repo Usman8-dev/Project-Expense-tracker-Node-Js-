@@ -545,11 +545,41 @@ const DeleteFolder = async (req, res) => {
     if (!folder) {
       return res.status(404).json({ success: false, message: 'Folder not found' });
     }
-    // Check for any expenses linked to this folder by name
-    const hasExpenses = await ExpenseModel.exists({ createdBy: req.user.id, folder: folder.name });
-    if (hasExpenses) {
-      return res.status(400).json({ success: false, message: 'Folder not empty – delete its transactions first' });
+
+    // Mirror the frontend grouping: a transaction belongs to this folder when
+    // it references the folder by name, or its date falls in the folder's month
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
+    ];
+    const nameParts = (folder.name || '').trim().split(/\s+/);
+    const monthIndex = monthNames.findIndex(
+      (m) => m.toLowerCase() === (nameParts[0] || '').toLowerCase()
+    );
+    const year = nameParts[1] || folder.year;
+
+    const conditions = [{ folder: folder.name }];
+    if (monthIndex >= 0 && /^\d{4}$/.test(String(year || ''))) {
+      conditions.push({
+        date: {
+          $gte: new Date(Number(year), monthIndex, 1),
+          $lt: new Date(Number(year), monthIndex + 1, 1),
+        },
+      });
     }
+
+    const hasExpenses = await ExpenseModel.exists({
+      createdBy: req.user.id,
+      $or: conditions,
+    });
+
+    if (hasExpenses) {
+      return res.status(400).json({
+        success: false,
+        message: 'This folder has transactions. Please delete its transactions first, then delete the folder.',
+      });
+    }
+
     await FolderModel.deleteOne({ _id: folder._id });
     return res.status(200).json({ success: true, message: 'Folder deleted successfully' });
   } catch (err) {
