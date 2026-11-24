@@ -16,7 +16,7 @@ const FolderModel = mongoose.Schema({
     },
     theme: {
         type: String,
-        enum: ['cyan', 'purple', 'amber', 'emerald', 'rose'],
+        enum: ['cyan', 'purple', 'amber', 'emerald', 'rose', 'blue', 'indigo', 'violet', 'pink', 'fuchsia', 'orange', 'teal'],
         default: 'cyan',
     },
     createdBy: {
