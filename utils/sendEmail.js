@@ -1,14 +1,11 @@
 const nodemailer = require("nodemailer");
 
 const sendEmail = async ({ to, subject, html, text }) => {
-  const fromName = (process.env.MAIL_FROM_NAME || "Expense Flow").trim();
-  const fromAddress = (process.env.MAIL_FROM_ADDRESS || "").trim();
-  const brevoApiKey = (
-    process.env.BREVO_API_KEY ||
-    (process.env.MAIL_PASSWORD && process.env.MAIL_PASSWORD.trim().startsWith("xkeysib-")
-      ? process.env.MAIL_PASSWORD
-      : "")
-  ).trim();
+  const clean = (val) => (val || "").trim().replace(/^["']|["']$/g, "");
+  const fromName = clean(process.env.MAIL_FROM_NAME) || "Expense Flow";
+  const fromAddress = clean(process.env.MAIL_FROM_ADDRESS);
+  const rawPass = clean(process.env.MAIL_PASSWORD);
+  const brevoApiKey = clean(process.env.BREVO_API_KEY) || (rawPass.startsWith("xkeysib-") ? rawPass : "");
 
   if (!fromAddress) {
     throw new Error("MAIL_FROM_ADDRESS is missing.");

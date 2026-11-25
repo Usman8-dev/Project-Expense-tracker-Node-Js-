@@ -171,7 +171,7 @@ const ForgotPassword = async (req, res) => {
             await user.save();
             return res.status(500).json({
                 success: false,
-                message: "Failed to send reset email. Please try again later.",
+                message: mailErr.message || "Failed to send reset email. Please try again later.",
             });
         }
 
