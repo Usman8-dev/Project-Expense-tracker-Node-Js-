@@ -5,6 +5,8 @@ const UserModel = mongoose.Schema({
     age: Number,
     email: String,
     password: String,
-})
+    resetPasswordToken: String,
+    resetPasswordExpires: Date,
+});
 
 module.exports = mongoose.model('user', UserModel);

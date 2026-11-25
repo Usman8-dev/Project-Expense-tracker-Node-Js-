@@ -31,3 +31,15 @@ exports.create_AND_upadte_Validation = [
         .notEmpty().withMessage('Amount is required')
         .isInt({ min: 1 }).withMessage('Amount must be a valid number')
 ];
+
+exports.forgotPasswordValidator = [
+    body('email')
+        .notEmpty().withMessage('Email is required')
+        .isEmail().withMessage('Email must be valid'),
+];
+
+exports.resetPasswordValidator = [
+    body('password')
+        .notEmpty().withMessage('Password is required')
+        .isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+];
