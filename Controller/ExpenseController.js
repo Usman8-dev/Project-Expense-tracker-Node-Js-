@@ -847,7 +847,7 @@ const exportExpensesToExcel = async (req, res) => {
       date: { $gte: start, $lte: end },
     })
       .populate("category_id", "name")
-      .sort({ date: -1 });
+      .sort({ date: 1, _id: 1 });
 
     if (expenses.length === 0) {
       return res.status(404).json({ message: "No transactions found" });
