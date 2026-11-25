@@ -165,6 +165,7 @@ const ForgotPassword = async (req, res) => {
                 html,
             });
         } catch (mailErr) {
+            console.error("ForgotPassword Mail Error:", mailErr);
             user.resetPasswordToken = undefined;
             user.resetPasswordExpires = undefined;
             await user.save();
